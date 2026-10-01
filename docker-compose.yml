@@ -1,0 +1,22 @@
+# ── Crazy Downloader — local / production Docker Compose ──
+# Usage:  docker compose up -d --build
+# Frontend:  http://localhost:3000
+# Backend:   http://localhost:8000/api/health
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - COOKIES_DIR=/tmp/crazy_downloader
+      - PORT=8000
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
