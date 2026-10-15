@@ -61,13 +61,13 @@ export default function Home() {
 
       {/* Search + Cookies */}
       <div
-        className="flex flex-col gap-3 animate-slide-up sm:flex-row sm:items-start"
+        className="flex flex-col gap-3 animate-slide-up sm:flex-row sm:items-center"
         style={{ animationDelay: "0.3s" }}
       >
         <div className="flex-1">
           <UrlInput onSubmit={handleSearch} loading={loading} />
         </div>
-        <div className="flex justify-center sm:pt-0.5">
+        <div className="flex justify-center">
           <CookieManager />
         </div>
       </div>
