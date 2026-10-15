@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Download, Film, Music, Clock, Eye, Cpu, Check, X, AlertCircle } from "lucide-react";
-import type { VideoInfo, FormatInfo } from "../api/client";
+import { getCookiesHeader, type VideoInfo, type FormatInfo } from "../api/client";
 
 interface Props {
   info: VideoInfo;
@@ -68,7 +68,10 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
 
     try {
       const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&format_id=${encodeURIComponent(fmt.format_id)}&title=${encodeURIComponent(title)}`;
-      const response = await fetch(downloadUrl, { signal: controller.signal });
+      const response = await fetch(downloadUrl, {
+        signal: controller.signal,
+        headers: getCookiesHeader(),
+      });
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
@@ -199,16 +202,16 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="relative h-2.5 overflow-hidden rounded-full bg-white/10">
           {isDone ? (
-            <div className="h-full w-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" />
+            <div className="progress-fill h-full w-full !from-emerald-500 !via-teal-400 !to-emerald-500" />
           ) : isError ? (
             <div className="h-full w-full rounded-full bg-gradient-to-r from-red-500 to-rose-500" />
           ) : isIndeterminate ? (
-            <div className="h-full w-1/4 animate-indeterminate rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-500" />
+            <div className="progress-fill h-full w-1/4 animate-indeterminate" />
           ) : (
             <div
-              className="h-full rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-500 transition-all duration-300"
+              className="progress-fill transition-all duration-300 ease-out"
               style={{ width: `${state.percent}%` }}
             />
           )}
@@ -285,7 +288,7 @@ export default function FormatList({ info, url }: Props) {
             <img
               src={info.thumbnail}
               alt={info.title}
-              className="h-24 w-full rounded-lg object-cover shadow-lg sm:w-44"
+              className="aspect-video w-full rounded-lg object-cover shadow-lg sm:h-24 sm:w-44 sm:aspect-auto"
             />
           )}
           <div className="min-w-0 flex-1">

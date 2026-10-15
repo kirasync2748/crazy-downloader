@@ -28,13 +28,3 @@ class VideoInfo(BaseModel):
     uploader: str | None = None
     view_count: int | None = None
     formats: list[FormatInfo] = []
-
-
-class CookieUpload(BaseModel):
-    cookies_text: str
-    source: str | None = "manual"  # "manual" | "auto"
-
-
-class CookieStatus(BaseModel):
-    has_cookies: bool
-    source: str | None = None  # "manual" | "auto" | None

@@ -10,7 +10,7 @@ Web application that lets you paste any public YouTube URL, view every available
 - **Video and audio merge** — DASH (video-only) formats are automatically merged with the best audio stream via ffmpeg, so every download includes sound.
 - **Real-time progress bar** — Watch the download happen with live percentage, speed (MB/s), and bytes transferred.
 - **Direct downloads** — Files stream through the server as a pipe; nothing is stored on disk.
-- **Cookie support** — Add cookies for age-restricted or private content. You stay in control.
+- **Cookie support** — Add cookies for age-restricted or private content. Cookies stay in your browser only.
 
 ## Tech Stack
 
@@ -20,7 +20,7 @@ Web application that lets you paste any public YouTube URL, view every available
 | Frontend | TypeScript 7 · React 19 · Vite 6 · Tailwind CSS 3     |
 | Runtime  | Node.js 24 LTS                                        |
 
-## Railway Deploy 
+## Railway Deploy
 
 1. Click the **Deploy on Railway** button above.
 2. Railway will automatically build the Docker image (frontend + backend in one container).
@@ -65,7 +65,7 @@ npm install
 npm run dev
 ```
 
-## Production Docker (single image)
+## Single-image Docker
 
 ```bash
 docker build -t crazy-downloader .
@@ -76,15 +76,11 @@ The multi-stage `Dockerfile` at the repository root builds the frontend, copies 
 
 ## API Reference
 
-| Method   | Endpoint                                                                | Description                                              |
-| -------- | ----------------------------------------------------------------------- | -------------------------------------------------------- |
-| `GET`    | `/api/health`                                                           | Health check                                             |
-| `GET`    | `/api/formats?url=<youtube-url>`                                        | Extract all available formats                            |
-| `GET`    | `/api/download?url=<youtube-url>&format_id=<id>&title=<title>`         | Stream a download (auto-merges audio for DASH formats)   |
-| `GET`    | `/api/cookies/status`                                                   | Check if cookies are set                                 |
-| `POST`   | `/api/cookies`                                                          | Upload a cookies.txt file                                |
-| `POST`   | `/api/cookies/auto`                                                     | Attempt automatic cookie extraction                      |
-| `DELETE` | `/api/cookies`                                                          | Remove stored cookies                                    |
+| Method | Endpoint                                                        | Description                                              |
+| ------ | --------------------------------------------------------------- | -------------------------------------------------------- |
+| `GET`  | `/api/health`                                                   | Health check                                             |
+| `GET`  | `/api/formats?url=<youtube-url>`                                | Extract all available formats                            |
+| `GET`  | `/api/download?url=<youtube-url>&format_id=<id>&title=<title>`  | Stream a download (auto-merges audio for DASH formats)   |
 
 ### Example
 
@@ -99,7 +95,7 @@ curl -L -o video.mp4 "http://localhost:8000/api/download?url=https://youtu.be/U6
 ## Privacy and Storage
 
 - **No server-side storage.** Downloads stream through the server as a pipe — the video never touches disk.
-- **Cookies are ephemeral.** They are stored in `/tmp` and disappear when the container restarts.
+- **Cookies stay in your browser.** They are stored in localStorage and sent per-request via the X-Cookies header. The server never persists them.
 - **No tracking.** No analytics, no logs, no databases.
 
 ## How It Works

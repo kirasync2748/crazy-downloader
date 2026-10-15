@@ -13,9 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# In production the frontend build is copied to backend/static (see docker-compose.yml)
-ENV COOKIES_DIR=/tmp/crazy_downloader
-
+# When deployed as a single image, the frontend build is copied to backend/static
 EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]

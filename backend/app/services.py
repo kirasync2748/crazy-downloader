@@ -5,15 +5,12 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 from yt_dlp import YoutubeDL
-
-COOKIES_DIR = Path(os.environ.get("COOKIES_DIR", "/tmp/crazy_downloader"))
-COOKIES_FILE = COOKIES_DIR / "cookies.txt"
-SOURCE_MARKER = COOKIES_DIR / ".source"
 
 # ── In-memory format cache (no persistent storage) ──
 _format_cache: dict[str, tuple[dict[str, Any], float]] = {}
@@ -37,58 +34,18 @@ def cache_set(url: str, info: dict[str, Any]) -> None:
         del _format_cache[k]
 
 
-def _ensure_cookies_dir() -> None:
-    COOKIES_DIR.mkdir(parents=True, exist_ok=True)
+def _write_temp_cookies(cookies_text: str) -> str | None:
+    """Write cookies text to a temporary file and return its path.
 
-
-def get_cookies_path() -> str | None:
-    """Return the cookies file path if cookies exist, else None."""
-    if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
-        return str(COOKIES_FILE)
-    return None
-
-
-def get_cookie_status() -> dict[str, Any]:
-    if not COOKIES_FILE.exists() or COOKIES_FILE.stat().st_size == 0:
-        return {"has_cookies": False, "source": None}
-    source = SOURCE_MARKER.read_text() if SOURCE_MARKER.exists() else "manual"
-    return {"has_cookies": True, "source": source}
-
-
-def save_cookies(cookies_text: str, source: str = "manual") -> None:
-    _ensure_cookies_dir()
-    COOKIES_FILE.write_text(cookies_text)
-    SOURCE_MARKER.write_text(source)
-
-
-def remove_cookies() -> None:
-    if COOKIES_FILE.exists():
-        COOKIES_FILE.unlink()
-    if SOURCE_MARKER.exists():
-        SOURCE_MARKER.unlink()
-
-
-def auto_extract_cookies() -> tuple[bool, str]:
-    """Try to extract YouTube cookies from installed browsers via yt-dlp."""
-    _ensure_cookies_dir()
-    browsers = ["chrome", "firefox", "edge", "brave", "chromium", "opera", "vivaldi"]
-    for browser in browsers:
-        try:
-            opts: dict[str, Any] = {
-                "quiet": True,
-                "no_warnings": True,
-                "skip_download": True,
-                "cookiefile": str(COOKIES_FILE),
-                "cookiesfrombrowser": (browser,),
-            }
-            with YoutubeDL(opts) as ydl:
-                ydl.extract_info("https://www.youtube.com", download=False)
-            if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
-                SOURCE_MARKER.write_text("auto")
-                return True, f"Cookies extracted from {browser}."
-        except Exception:
-            continue
-    return False, "No browser with YouTube cookies was found on the server."
+    The caller is responsible for deleting the file after use.
+    Returns None if cookies_text is empty.
+    """
+    if not cookies_text or not cookies_text.strip():
+        return None
+    fd, path = tempfile.mkstemp(suffix=".txt", prefix="cdl_cookies_")
+    os.write(fd, cookies_text.encode("utf-8"))
+    os.close(fd)
+    return path
 
 
 def _ydl_opts(cookies_path: str | None = None) -> dict[str, Any]:
@@ -109,9 +66,18 @@ def _extract_info_sync(url: str, cookies_path: str | None = None) -> dict[str, A
         return ydl.extract_info(url, download=False)
 
 
-async def extract_info(url: str, cookies_path: str | None = None) -> dict[str, Any]:
-    """Run yt-dlp extraction in a thread to avoid blocking the event loop."""
-    return await asyncio.to_thread(_extract_info_sync, url, cookies_path)
+async def extract_info(url: str, cookies_text: str | None = None) -> dict[str, Any]:
+    """Run yt-dlp extraction in a thread to avoid blocking the event loop.
+
+    Cookies text (if provided) is written to a temporary file, used for the
+    extraction, then immediately deleted. Cookies are never persisted on the server.
+    """
+    cookies_path = _write_temp_cookies(cookies_text) if cookies_text else None
+    try:
+        return await asyncio.to_thread(_extract_info_sync, url, cookies_path)
+    finally:
+        if cookies_path:
+            Path(cookies_path).unlink(missing_ok=True)
 
 
 def categorize_format(fmt: dict[str, Any]) -> str | None:

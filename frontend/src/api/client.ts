@@ -1,5 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
+const COOKIES_STORAGE_KEY = "crazy-downloader-cookies";
+const COOKIES_SOURCE_KEY = "crazy-downloader-cookies-source";
+
 export interface FormatInfo {
   format_id: string;
   ext: string;
@@ -30,6 +33,44 @@ export interface CookieStatus {
   source: string | null;
 }
 
+// ── Cookie storage (browser localStorage — never stored on server) ──
+
+export function getStoredCookies(): string {
+  return localStorage.getItem(COOKIES_STORAGE_KEY) || "";
+}
+
+export function setStoredCookies(text: string, source: string = "manual"): void {
+  localStorage.setItem(COOKIES_STORAGE_KEY, text);
+  localStorage.setItem(COOKIES_SOURCE_KEY, source);
+}
+
+export function removeStoredCookies(): void {
+  localStorage.removeItem(COOKIES_STORAGE_KEY);
+  localStorage.removeItem(COOKIES_SOURCE_KEY);
+}
+
+export function getCookieStatus(): CookieStatus {
+  const text = getStoredCookies();
+  if (!text) return { has_cookies: false, source: null };
+  return { has_cookies: true, source: localStorage.getItem(COOKIES_SOURCE_KEY) || "manual" };
+}
+
+function encodeCookiesBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/** Returns headers to attach to API requests so the server can use cookies per-request. */
+export function getCookiesHeader(): Record<string, string> {
+  const cookies = getStoredCookies();
+  if (!cookies) return {};
+  return { "X-Cookies": encodeCookiesBase64(cookies) };
+}
+
 // Known YouTube cookie names — used to filter document.cookie
 const YOUTUBE_COOKIE_NAMES = new Set([
   "VISITOR_INFO1_LIVE",
@@ -54,11 +95,6 @@ const YOUTUBE_COOKIE_NAMES = new Set([
  * Read cookies from the user's browser (document.cookie) and convert any
  * YouTube-relevant ones to Netscape cookies.txt format.
  * Returns the cookies text, or empty string if no YouTube cookies found.
- *
- * Note: browsers enforce Same-Origin Policy, so document.cookie only contains
- * cookies for OUR domain — not youtube.com. This will only find YouTube cookies
- * if they were explicitly set for this origin. In most cases it returns "" and
- * the user should use manual upload instead.
  */
 export function detectBrowserCookies(): string {
   const raw = document.cookie;
@@ -108,34 +144,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   async getFormats(url: string): Promise<VideoInfo> {
-    return request<VideoInfo>(`${API_BASE}/api/formats?url=${encodeURIComponent(url)}`);
+    return request<VideoInfo>(`${API_BASE}/api/formats?url=${encodeURIComponent(url)}`, {
+      headers: getCookiesHeader(),
+    });
   },
 
   downloadUrl(url: string, formatId: string, title: string): string {
     return `${API_BASE}/api/download?url=${encodeURIComponent(url)}&format_id=${encodeURIComponent(formatId)}&title=${encodeURIComponent(title)}`;
-  },
-
-  async getCookieStatus(): Promise<CookieStatus> {
-    return request<CookieStatus>(`${API_BASE}/api/cookies/status`);
-  },
-
-  async uploadCookies(cookiesText: string, source: string = "manual"): Promise<CookieStatus> {
-    return request<CookieStatus>(`${API_BASE}/api/cookies`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cookies_text: cookiesText, source }),
-    });
-  },
-
-  async autoCookies(): Promise<CookieStatus> {
-    return request<CookieStatus>(`${API_BASE}/api/cookies/auto`, {
-      method: "POST",
-    });
-  },
-
-  async removeCookies(): Promise<CookieStatus> {
-    return request<CookieStatus>(`${API_BASE}/api/cookies`, {
-      method: "DELETE",
-    });
   },
 };

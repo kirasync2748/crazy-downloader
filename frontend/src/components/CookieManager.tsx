@@ -1,101 +1,76 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Cookie, X, Upload, ScanSearch, Loader2, CheckCircle2 } from "lucide-react";
-import { api, detectBrowserCookies, type CookieStatus } from "../api/client";
+import { Cookie, X, Upload, ScanSearch, CheckCircle2 } from "lucide-react";
+import {
+  detectBrowserCookies,
+  getCookieStatus,
+  setStoredCookies,
+  removeStoredCookies,
+  type CookieStatus,
+} from "../api/client";
 
 export default function CookieManager() {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<CookieStatus>({ has_cookies: false, source: null });
   const [cookiesText, setCookiesText] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const autoRan = useRef(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      setStatus(await api.getCookieStatus());
-    } catch {
-      /* ignore */
-    }
+  const refresh = useCallback(() => {
+    setStatus(getCookieStatus());
   }, []);
 
-  // Auto-detect browser cookies on page load (client-side, no server call)
-  const autoDetect = useCallback(async (): Promise<boolean> => {
-    const cookiesText = detectBrowserCookies();
-    if (!cookiesText) return false;
-    try {
-      setStatus(await api.uploadCookies(cookiesText, "auto"));
-      return true;
-    } catch {
-      return false;
-    }
+  const autoDetect = useCallback((): boolean => {
+    const detected = detectBrowserCookies();
+    if (!detected) return false;
+    setStoredCookies(detected, "auto");
+    setStatus(getCookieStatus());
+    return true;
   }, []);
 
   useEffect(() => {
     if (autoRan.current) return;
     autoRan.current = true;
-    (async () => {
-      await refresh();
-      // Only auto-detect if no cookies are already set
-      const current = await api.getCookieStatus();
-      if (!current.has_cookies) {
-        await autoDetect();
-      }
-    })();
+    refresh();
+    if (!getCookieStatus().has_cookies) {
+      autoDetect();
+    }
   }, [refresh, autoDetect]);
 
-  const handleManual = async () => {
+  const handleManual = () => {
     if (!cookiesText.trim()) {
       setError("Paste your cookies.txt content first.");
       return;
     }
-    setLoading(true);
     setError("");
     setSuccess("");
-    try {
-      setStatus(await api.uploadCookies(cookiesText));
-      setCookiesText("");
-      setSuccess("Cookies saved successfully.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save cookies.");
-    } finally {
-      setLoading(false);
-    }
+    setStoredCookies(cookiesText, "manual");
+    setCookiesText("");
+    setStatus(getCookieStatus());
+    setSuccess("Cookies saved in your browser.");
   };
 
-  const handleAuto = async () => {
-    setLoading(true);
+  const handleAuto = () => {
     setError("");
     setSuccess("");
-    try {
-      const cookiesText = detectBrowserCookies();
-      if (!cookiesText) {
-        setError(
-          'No YouTube cookies found in your browser. Browsers don\'t share cookies between websites for security. Please export your cookies using a browser extension (e.g. "Get cookies.txt") and paste them below.'
-        );
-        return;
-      }
-      setStatus(await api.uploadCookies(cookiesText, "auto"));
-      setSuccess("Cookies auto-detected from your browser successfully.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Auto-detection failed.");
-    } finally {
-      setLoading(false);
+    const detected = detectBrowserCookies();
+    if (!detected) {
+      setError(
+        'No YouTube cookies found in your browser. Browsers don\'t share cookies between websites for security. Please export your cookies using a browser extension (e.g. "Get cookies.txt") and paste them below.'
+      );
+      return;
     }
+    setStoredCookies(detected, "auto");
+    setStatus(getCookieStatus());
+    setSuccess("Cookies auto-detected from your browser.");
   };
 
-  const handleRemove = async () => {
-    setLoading(true);
+  const handleRemove = () => {
     setError("");
     setSuccess("");
-    try {
-      setStatus(await api.removeCookies());
-      setSuccess("Cookies removed.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to remove cookies.");
-    } finally {
-      setLoading(false);
-    }
+    removeStoredCookies();
+    setStatus(getCookieStatus());
+    setSuccess("Cookies removed from your browser.");
   };
 
   return (
@@ -138,6 +113,16 @@ export default function CookieManager() {
               </button>
             </div>
 
+            {/* Privacy note */}
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-xs text-blue-300/80">
+              <Cookie className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+              <p>
+                Cookies are stored only in your browser (localStorage). They are sent with each
+                request for that download only and never saved on our server. Clearing your browser
+                data removes them permanently.
+              </p>
+            </div>
+
             {/* Status badge */}
             <div
               className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
@@ -154,17 +139,13 @@ export default function CookieManager() {
 
             {/* Auto-extract */}
             <div className="mb-4">
-              <button onClick={handleAuto} disabled={loading} className="btn-ghost w-full">
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ScanSearch className="h-4 w-4" />
-                )}
+              <button onClick={handleAuto} className="btn-ghost w-full">
+                <ScanSearch className="h-4 w-4" />
                 Auto-detect Browser Cookies
               </button>
               <p className="mt-1.5 text-xs text-slate-500">
-                Checks your browser cookies automatically when you visit this page. If no YouTube
-                cookies are found, use the manual upload below.
+                Checks your browser cookies automatically. If no YouTube cookies are found, use the
+                manual upload below.
               </p>
             </div>
 
@@ -180,16 +161,8 @@ export default function CookieManager() {
                 placeholder="# Netscape HTTP Cookie File&#10;.youtube.com  TRUE  /  TRUE  1234567890  name  value"
                 className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 font-mono text-xs text-slate-300 placeholder:text-slate-600 focus:border-brand-500 focus:outline-none"
               />
-              <button
-                onClick={handleManual}
-                disabled={loading}
-                className="btn-primary mt-2 w-full text-sm"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
+              <button onClick={handleManual} className="btn-primary mt-2 w-full text-sm">
+                <Upload className="h-4 w-4" />
                 Save Cookies
               </button>
             </div>
@@ -198,8 +171,7 @@ export default function CookieManager() {
             {status.has_cookies && (
               <button
                 onClick={handleRemove}
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20"
               >
                 <X className="h-4 w-4" />
                 Remove Cookies

@@ -1,4 +1,4 @@
-# ── Crazy Downloader — single-service production build ──
+# ── Crazy Downloader — single-service stable build ──
 # Builds the frontend (Vite) and backend (FastAPI) into one image.
 # The backend serves both the API and the built static frontend.
 
@@ -23,6 +23,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 COPY --from=frontend-build /build/dist ./static
 
-ENV COOKIES_DIR=/tmp/crazy_downloader
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]

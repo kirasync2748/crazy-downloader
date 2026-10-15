@@ -9,6 +9,7 @@ __pycache__/
 
 # Build output
 backend/static/
+.ruff_cache/
 
 # Environment
 .env

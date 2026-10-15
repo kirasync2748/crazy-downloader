@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Loader2, AlertCircle } from "lucide-react";
+import { Search, Loader2, AlertCircle, X, ClipboardPaste } from "lucide-react";
 
 interface Props {
   onSubmit: (url: string) => void;
@@ -27,6 +27,23 @@ export default function UrlInput({ onSubmit, loading }: Props) {
     onSubmit(url.trim());
   };
 
+  const handleClear = () => {
+    setUrl("");
+    setError("");
+  };
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setUrl(text.trim());
+        setError("");
+      }
+    } catch {
+      setError("Could not access clipboard. Please paste manually with Ctrl+V.");
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="w-full">
       <div
@@ -44,6 +61,26 @@ export default function UrlInput({ onSubmit, loading }: Props) {
             className="w-full bg-transparent py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none sm:text-base"
             disabled={loading}
           />
+          {!loading && url && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="shrink-0 rounded-full p-1 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Clear URL"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          {!loading && !url && (
+            <button
+              type="button"
+              onClick={handlePaste}
+              className="shrink-0 rounded-full p-1 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Paste from clipboard"
+            >
+              <ClipboardPaste className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <button type="submit" disabled={loading} className="btn-primary shrink-0">
           {loading ? (

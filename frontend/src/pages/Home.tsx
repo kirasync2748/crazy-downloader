@@ -3,6 +3,7 @@ import { AlertCircle, Youtube } from "lucide-react";
 import UrlInput from "../components/UrlInput";
 import FormatList from "../components/FormatList";
 import CookieManager from "../components/CookieManager";
+import HowItWorks from "../components/HowItWorks";
 import { api, type VideoInfo } from "../api/client";
 
 export default function Home() {
@@ -34,23 +35,35 @@ export default function Home() {
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-14">
       {/* Hero */}
       <div className="mb-8 text-center">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-slate-400 sm:text-sm">
+        <div
+          className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-slate-400 animate-slide-up sm:text-sm"
+          style={{ animationDelay: "0s" }}
+        >
           <Youtube className="h-4 w-4 text-red-500" />
           Play locally
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
+        <h1
+          className="text-3xl font-extrabold tracking-tight animate-slide-up sm:text-5xl"
+          style={{ animationDelay: "0.1s" }}
+        >
           Download videos
           <br />
-          <span className="gradient-text">in any format</span>
+          <span className="animate-gradient-text">in any format</span>
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-sm text-slate-400 sm:text-base">
+        <p
+          className="mx-auto mt-4 max-w-xl text-sm text-slate-400 animate-slide-up sm:text-base"
+          style={{ animationDelay: "0.2s" }}
+        >
           Paste a YouTube URL, pick a format, download straight to your device. No storage, no
           sign-up.
         </p>
       </div>
 
       {/* Search + Cookies */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div
+        className="flex flex-col gap-3 animate-slide-up sm:flex-row sm:items-start"
+        style={{ animationDelay: "0.3s" }}
+      >
         <div className="flex-1">
           <UrlInput onSubmit={handleSearch} loading={loading} />
         </div>
@@ -76,6 +89,9 @@ export default function Home() {
           <FormatList info={videoInfo} url={activeUrl} />
         </div>
       )}
+
+      {/* How it works — shown when no search has been made */}
+      {!loading && !videoInfo && !error && <HowItWorks />}
     </div>
   );
 }

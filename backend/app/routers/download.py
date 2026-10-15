@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import re
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from ..services import (
@@ -15,22 +17,42 @@ from ..services import (
     extract_info,
     find_best_audio,
     find_format,
-    get_cookies_path,
     parse_formats,
     sanitize_title,
 )
 
 router = APIRouter(tags=["download"])
 
+_YOUTUBE_URL_RE = re.compile(
+    r"^https?://(www\.|m\.)?"
+    r"(youtube\.com/(watch|embed|v|shorts|live)|youtu\.be/)",
+    re.IGNORECASE,
+)
 
-async def _get_info(url: str) -> dict:
+
+def _validate_youtube_url(url: str) -> None:
+    """Reject non-YouTube URLs to prevent proxy abuse."""
+    if not _YOUTUBE_URL_RE.match(url):
+        raise HTTPException(status_code=400, detail="Only YouTube URLs are supported.")
+
+
+def _decode_cookies(x_cookies: str | None) -> str | None:
+    """Decode Base64-encoded cookies text from the X-Cookies header."""
+    if not x_cookies:
+        return None
+    try:
+        return base64.b64decode(x_cookies).decode("utf-8")
+    except Exception:
+        return None
+
+
+async def _get_info(url: str, cookies_text: str | None = None) -> dict:
     """Get video info from cache or extract fresh (cache speeds up downloads)."""
     info = cache_get(url)
     if info:
         return info
-    cookies_path = get_cookies_path()
     try:
-        info = await extract_info(url, cookies_path)
+        info = await extract_info(url, cookies_text)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract video info: {exc}") from exc
     cache_set(url, info)
@@ -38,12 +60,18 @@ async def _get_info(url: str) -> dict:
 
 
 @router.get("/formats")
-async def get_formats(url: str = Query(..., description="Public YouTube video URL")):
+async def get_formats(
+    url: str = Query(..., description="Public YouTube video URL"),
+    x_cookies: str | None = Header(default=None, alias="X-Cookies"),
+):
     """Extract all available formats for a YouTube video."""
     if not url.strip():
         raise HTTPException(status_code=400, detail="A URL is required.")
 
-    info = await _get_info(url)
+    _validate_youtube_url(url.strip())
+
+    cookies_text = _decode_cookies(x_cookies)
+    info = await _get_info(url, cookies_text)
 
     return {
         "title": info.get("title", "Unknown"),
@@ -60,13 +88,17 @@ async def download_video(
     url: str = Query(..., description="Public YouTube video URL"),
     format_id: str = Query(..., description="Format ID from /formats"),
     title: str = Query("video", description="Preferred filename stem"),
+    x_cookies: str | None = Header(default=None, alias="X-Cookies"),
 ):
     """Stream the selected format directly to the client — no server-side storage.
 
     For video-only (DASH) formats, automatically merges with the best audio
     stream using ffmpeg so the downloaded file has both video and audio.
     """
-    info = await _get_info(url)
+    _validate_youtube_url(url.strip())
+
+    cookies_text = _decode_cookies(x_cookies)
+    info = await _get_info(url, cookies_text)
 
     fmt = find_format(info, format_id)
     if not fmt or "url" not in fmt:

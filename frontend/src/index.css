@@ -18,6 +18,33 @@
     @apply bg-gradient-to-r from-brand-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent;
   }
 
+  .animate-gradient-text {
+    @apply bg-gradient-to-r from-brand-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent;
+    background-size: 200% auto;
+    animation: shimmer 4s linear infinite;
+  }
+
+  .animate-brand-text {
+    @apply bg-gradient-to-r from-brand-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent;
+    background-size: 200% auto;
+    animation: brandShimmer 3s ease-in-out infinite;
+  }
+
+  .progress-fill {
+    @apply relative h-full rounded-full bg-gradient-to-r from-brand-500 via-fuchsia-500 to-pink-500;
+    background-size: 200% 100%;
+    animation: progressShimmer 2s linear infinite;
+  }
+
+  .progress-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    box-shadow: 0 0 12px 0 rgba(217, 70, 239, 0.6);
+    animation: progressGlow 1.5s ease-in-out infinite;
+  }
+
   .glass {
     @apply border border-white/10 bg-white/5 backdrop-blur-xl;
   }
@@ -28,6 +55,24 @@
 
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white active:scale-[0.98];
+  }
+
+  .glow-card {
+    @apply transition-all duration-300;
+  }
+
+  .glow-card:hover {
+    @apply border-white/20 bg-white/[0.04];
+    box-shadow: 0 0 30px -10px rgba(129, 140, 248, 0.25);
+    transform: translateY(-3px);
+  }
+
+  .section-card {
+    @apply rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-all duration-300;
+  }
+
+  .section-card:hover {
+    @apply border-white/10 bg-white/[0.04];
   }
 }
 

@@ -1,4 +1,4 @@
-# ── Crazy Downloader frontend — production build ──
+# ── Crazy Downloader frontend — stable build ──
 # Stage 1: build TypeScript + Vite
 FROM node:24-slim AS build
 WORKDIR /app
