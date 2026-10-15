@@ -149,6 +149,8 @@ async def download_video(
         resp_headers["Content-Type"] = upstream.headers["content-type"]
     if filesize:
         resp_headers["Content-Length"] = str(filesize)
+    elif "content-length" in upstream.headers:
+        resp_headers["Content-Length"] = upstream.headers["content-length"]
 
     async def stream():
         try:
