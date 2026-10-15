@@ -1,5 +1,17 @@
 import { useState, useRef } from "react";
-import { Download, Film, Music, Clock, Eye, Cpu, Check, X, AlertCircle } from "lucide-react";
+import {
+  Download,
+  Film,
+  Music,
+  Clock,
+  Eye,
+  Cpu,
+  Check,
+  X,
+  AlertCircle,
+  Loader2,
+  Zap,
+} from "lucide-react";
 import { getCookiesHeader, type VideoInfo, type FormatInfo } from "../api/client";
 
 interface Props {
@@ -9,19 +21,23 @@ interface Props {
 
 interface DownloadState {
   status: "idle" | "downloading" | "done" | "error";
+  phase: "connecting" | "downloading" | "merging" | "finalizing";
   received: number;
   total: number;
   percent: number; // -1 = unknown
   speed: number; // MB/s
+  eta: number | null; // seconds remaining, null = unknown
   errorMsg: string;
 }
 
 const idleState: DownloadState = {
   status: "idle",
+  phase: "connecting",
   received: 0,
   total: 0,
   percent: -1,
   speed: 0,
+  eta: null,
   errorMsg: "",
 };
 
@@ -35,6 +51,14 @@ function formatBytes(bytes: number): string {
     i++;
   }
   return `${sz.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function formatETA(seconds: number | null): string {
+  if (seconds == null || seconds <= 0 || !isFinite(seconds)) return "";
+  if (seconds < 60) return `${Math.ceil(seconds)}s left`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.ceil(seconds % 60);
+  return `${m}m ${s}s left`;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -64,7 +88,7 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
   const handleDownload = async () => {
     const controller = new AbortController();
     abortRef.current = controller;
-    setState({ ...idleState, status: "downloading" });
+    setState({ ...idleState, status: "downloading", phase: "connecting" });
 
     try {
       const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&format_id=${encodeURIComponent(fmt.format_id)}&title=${encodeURIComponent(title)}`;
@@ -88,6 +112,14 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
           ? parseInt(estimatedSize)
           : 0;
 
+      // Detect if this is a merged (ffmpeg) stream — no Content-Length but has estimate
+      const isMerged = !contentLength && !!estimatedSize;
+      if (isMerged) {
+        setState((prev) => ({ ...prev, phase: "merging", total }));
+      } else {
+        setState((prev) => ({ ...prev, phase: "downloading", total }));
+      }
+
       // Parse filename from Content-Disposition
       const disposition = response.headers.get("Content-Disposition") || "";
       const nameMatch = disposition.match(/filename="?(.+?)"?(?:;|$)/);
@@ -96,8 +128,9 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let received = 0;
-      const startTime = Date.now();
       let lastUpdate = 0;
+      let lastReceived = 0;
+      let lastSpeedTime = Date.now();
 
       while (true) {
         const { done, value } = await reader.read();
@@ -106,17 +139,29 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
         received += value.length;
 
         const now = Date.now();
-        if (now - lastUpdate > 200) {
-          const elapsed = (now - startTime) / 1000;
-          const speed = received / 1024 / 1024 / Math.max(elapsed, 0.1);
+        // Update every 100ms for snappy real-time feedback (was 200ms)
+        if (now - lastUpdate > 100) {
+          const dt = (now - lastSpeedTime) / 1000;
+          const instantSpeed = (received - lastReceived) / 1024 / 1024 / Math.max(dt, 0.1);
           const percent = total > 0 ? Math.min(99, Math.round((received / total) * 100)) : -1;
-          setState((prev) => ({ ...prev, received, total, percent, speed }));
+          // EMA: blend previous speed with instant speed for smooth-but-responsive feedback
+          setState((prev) => {
+            const smoothSpeed =
+              prev.speed > 0 ? prev.speed * 0.6 + instantSpeed * 0.4 : instantSpeed;
+            const eta =
+              smoothSpeed > 0 && total > 0
+                ? (total - received) / (smoothSpeed * 1024 * 1024)
+                : null;
+            return { ...prev, received, total, percent, speed: smoothSpeed, eta };
+          });
+          lastReceived = received;
+          lastSpeedTime = now;
           lastUpdate = now;
         }
       }
 
-      // 100% — assemble and trigger native save
-      setState((prev) => ({ ...prev, percent: 100, received: prev.received }));
+      // Finalizing — assemble blob and trigger save
+      setState((prev) => ({ ...prev, phase: "finalizing", percent: 100, eta: null }));
 
       const blob = new Blob(chunks as BlobPart[], {
         type: response.headers.get("Content-Type") || "application/octet-stream",
@@ -151,15 +196,24 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
     abortRef.current?.abort();
   };
 
+  // ── Phase labels ──
+  const phaseLabels: Record<string, string> = {
+    connecting: "Connecting to server…",
+    downloading: "Downloading from YouTube…",
+    merging: "Fetching & merging video + audio…",
+    finalizing: "Finalizing your file…",
+  };
+
   // ── Downloading / done / error states show a progress card ──
   if (state.status !== "idle") {
     const isDone = state.status === "done";
     const isError = state.status === "error";
     const isIndeterminate = state.percent < 0 && !isDone;
+    const isActive = !isDone && !isError;
 
     return (
       <div
-        className={`rounded-xl border p-3 transition-all ${
+        className={`rounded-xl border p-3.5 transition-all ${
           isDone
             ? "border-emerald-500/20 bg-emerald-500/[0.03]"
             : isError
@@ -168,7 +222,7 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
         }`}
       >
         {/* Header row */}
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm">
             <span className="font-bold text-white">{quality}</span>
             <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-300">
@@ -185,12 +239,13 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
                 Failed
               </span>
             ) : (
-              <span className="text-xs text-slate-400">
-                {isIndeterminate ? "Processing…" : `${state.percent}%`}
+              <span className="flex items-center gap-1.5 text-xs font-medium text-brand-300">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {isIndeterminate ? phaseLabels[state.phase] : `${state.percent}%`}
               </span>
             )}
           </div>
-          {!isDone && !isError && (
+          {isActive && (
             <button
               onClick={handleCancel}
               className="rounded-md p-1 text-slate-500 transition-colors hover:bg-white/10 hover:text-red-400"
@@ -211,28 +266,41 @@ function FormatCard({ fmt, url, title }: { fmt: FormatInfo; url: string; title: 
             <div className="progress-fill h-full w-1/4 animate-indeterminate" />
           ) : (
             <div
-              className="progress-fill transition-all duration-300 ease-out"
+              className="progress-fill transition-all duration-150 ease-out"
               style={{ width: `${state.percent}%` }}
             />
           )}
         </div>
 
         {/* Footer info */}
-        <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
           {isError ? (
             <span className="truncate text-red-400/70">{state.errorMsg}</span>
           ) : isDone ? (
-            <span>Saved to your device</span>
+            <span className="text-emerald-400/70">Saved to your device</span>
           ) : (
             <>
-              <span>
-                {isIndeterminate
-                  ? `${formatBytes(state.received)} downloaded`
-                  : `${formatBytes(state.received)} / ${formatBytes(state.total)}`}
+              <span className="flex items-center gap-2">
+                {isIndeterminate && (
+                  <span className="text-slate-400">{phaseLabels[state.phase]}</span>
+                )}
+                <span className="tabular-nums">
+                  {isIndeterminate
+                    ? `${formatBytes(state.received)} streamed`
+                    : `${formatBytes(state.received)} / ${formatBytes(state.total)}`}
+                </span>
               </span>
-              {state.speed > 0 && (
-                <span className="tabular-nums">{state.speed.toFixed(1)} MB/s</span>
-              )}
+              <span className="flex items-center gap-2 tabular-nums">
+                {state.speed > 0 && (
+                  <span className="flex items-center gap-1 text-slate-400">
+                    <Zap className="h-3 w-3 text-amber-400/70" />
+                    {state.speed.toFixed(1)} MB/s
+                  </span>
+                )}
+                {state.eta != null && state.eta > 0 && (
+                  <span className="text-slate-400">{formatETA(state.eta)}</span>
+                )}
+              </span>
             </>
           )}
         </div>

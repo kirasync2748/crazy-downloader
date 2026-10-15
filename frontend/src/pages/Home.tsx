@@ -4,6 +4,7 @@ import UrlInput from "../components/UrlInput";
 import FormatList from "../components/FormatList";
 import CookieManager from "../components/CookieManager";
 import HowItWorks from "../components/HowItWorks";
+import AdSection from "../components/AdSection";
 import { api, type VideoInfo } from "../api/client";
 
 export default function Home() {
@@ -71,6 +72,9 @@ export default function Home() {
           <CookieManager />
         </div>
       </div>
+
+      {/* Sponsored banner — hidden when a search is active */}
+      {!loading && !videoInfo && !error && <AdSection />}
 
       {/* Error */}
       {error && (
