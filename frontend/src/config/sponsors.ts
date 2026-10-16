@@ -19,8 +19,17 @@ export interface Sponsor {
   alt: string;
 }
 
-/** The currently active sponsor. Set to `null` to show the "no sponsors" placeholder. */
+/** The currently active sponsor. Set to `null` to show the "no sponsors" placeholder.
+ *  If you have ads, comment out this line and uncomment the object below. */
 export const activeSponsor: Sponsor | null = null;
+
+/** Uncomment when you have a sponsor, then comment out the `null` line above.
+export const activeSponsor: Sponsor | null = {
+  image: "#",
+  link: "#",
+  alt: "#",
+};
+**/
 
 /** Email or contact link shown in the "no sponsors" placeholder. */
 export const sponsorContactLink = "mailto:#";
